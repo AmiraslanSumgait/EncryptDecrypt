@@ -29,6 +29,8 @@ namespace EncryptDecryptFile
         }
 
         public List<string> Text { get; set; } = new List<string>();
+        OpenFileDialog openFileDialog = new OpenFileDialog();
+        private CancellationTokenSource _ct = new CancellationTokenSource();
         public static string XORCipher(string data, string key)
         {
             int dataLen = data.Length;
@@ -45,44 +47,56 @@ namespace EncryptDecryptFile
 
         private void BtnFile_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog openFileDialog = new OpenFileDialog();
+
             openFileDialog.Filter = "All files|*.*|Text files|*.txt";
             openFileDialog.FilterIndex = 2;
             if (openFileDialog.ShowDialog() == true)
             {
-                using (StreamReader sr = new StreamReader(openFileDialog.FileName))
-                {
-                    string line;
-                    while ((line = sr.ReadLine()) != null)
-                    {
-                        Text.Add(line);
-                    }
-                    txbFile.Text = openFileDialog.FileName;
-                }
+
+                txbFile.Text = openFileDialog.FileName;
             }
+        }
+        private void EncryptDecryptProcess(CancellationToken token)
+        {
+            using (StreamReader sr = new StreamReader(openFileDialog.FileName))
+            {
+                Text.Clear();
+                string line;
+                while ((line = sr.ReadLine()) != null)
+                {
+                    Text.Add(line);
+                }
+
+            }
+
+            //string toFile = txbFile.Text;
+            StringBuilder sb = new StringBuilder();
+            this.Dispatcher.Invoke(() =>
+            {
+               
+                using (var stream = File.Create(txbFile.Text))
+                {
+                    using (StreamWriter sw = new StreamWriter(stream))
+                    {
+                        foreach (var item in Text.FirstOrDefault(w=>w.Any()))
+                        {
+                            sb.Append(item);
+                            Thread.Sleep(1000);
+                            Dispatcher.Invoke(new Action(() => progressBar.Value += 1));
+
+                        }
+                        sw.WriteLine(XORCipher(sb.ToString(), txbPassword.Text));
+                    }
+
+                }
+            });
         }
         private void btnStart_Click(object sender, RoutedEventArgs e)
         {
-            string toFile = txbFile.Text;
-            StringBuilder sb = new StringBuilder();
-            using (var stream = File.Create(toFile))
+            ThreadPool.QueueUserWorkItem((s) =>
             {
-                using (StreamWriter sw = new StreamWriter(stream))
-                {
-                    foreach (var item in Text)
-                    {
-                        Thread.Sleep(1000);
-                        
-                        sb.Append(item);
-                    }
-                    sw.WriteLine(XORCipher(sb.ToString(), txbPassword.Text));
-                }
-              
-                //Dispatcher.Invoke(new Action(() =>
-                //{
-                   
-                //}));
-            }
+                EncryptDecryptProcess(_ct.Token);
+            });
         }
     }
 }
